@@ -10,7 +10,34 @@ const DEFAULT_CHAT_ID = "-1009999999999";
 // === GOOGLE SHEETS CONFIG ===
 const SPREADSHEET_ID = '17YOFmDay7xBFiTnX804Hi9jLWoOsl1MiNiM2JxBF3tQ';
 const SERVICE_ACCOUNT_EMAIL = 'mitra-reminder@mitra-reminder.iam.gserviceaccount.com';
-const PRIVATE_KEY = `-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCey/1VIjruUBXf\nHx+mRCavNIIQ1GHeV4Q64rSEuJZravnmHOs0/uI29fjCh6wsSo6/xgBdgQv1ZmyU\nt/DCCVz2RJRkVnm6cVrMZBdym70L6ZmE+0Z8ZgGdMRec9wy5U3+2v16rvfynU032\nY2xtF5tbeCZvvqaPlJrwRIxDT7i8sUWb6VRkQNr9epL9sGtbO2My/Q6WgCPTsDWa\n27LtuqAaglipUEX/cCzbeuNxpdMSJ7ILCrX3Nv9N05SbyUFSYhaFmnzkxcvqtib0\n4ArBsL9HTul7RAsbD5zdEyxI2+yDoIRlml6jaH1PFj2OP1yg2QyMEoHDDBgi+w0I\n9teYBdx5AgMBAAECggEAGkwrcb4XttAt8xOnLOSD6IeAU7OsWoMxS4QwQ3uDM5pV\ndMGMxSvBwDrXXbXUskgNoF40wMdmeNcju7RDi4q76a+9SGmWwqTTld4skOcQNWkT\n6rUnPOIyubq/z5eNNKLKl3PVRIlTzk0KL/fSpLVgXdNFwEM5N7VzPD+J3/rTm/HX\ncJTa6JHyVD/1ay0wG89SHLGWAw9bABIZuSc9+X160jshp4TM/X6w+F8iBKvocAVh\nvS4q75qq3XeUC63tr9sMCmxpCr1mgcF9d6eONN2Yz/mgnaFtRmc1GiiKgtqFuF4c\n7HDffKQQgD4TyB4hUE0PVuICeomi2BcMsBH96b0dZQKBgQDf6kKR9SluhBMVnYWr\nxx/j2fWhxzo/23y0MO0ntNKKHhVVTfboRKlBH12HYutnAhWgH4t3SLxejJrEX+vu\njg3z6sE1fmXP7zDNPsmiNs7Z4kdVsRcs8GmJXAkrEBjWnleS66tY83qVHWBbZXNF\nuuzRbvOHWqhT+UtIUazt48jXLQKBgQC1jQlrgp6QckAf0aS602NgQlzcEus+INP/\nw/pAgPMR/Sh9DvNWrolq4Zk5vhKkcDeUYuML2ygyU8EN0IHQL6zhG/ekgfSz9eg8\nQMrwFuJaEWtoqneGMgs2hE725hllYEGDI5jGzYlEm7jj5/glfRLnsT3efzIus6nj\ne6BETD8p/QKBgQDXupY6k25AeOT+LU7M6kMSPjtGi3DWdzvVS1IhsDgsM8Gv9zaM\nHyLGiFaPCsHr83ksVVgEK8K4gVTXH+dqZdiRiTputIGY7UUiaXzQWWe/SiAaMk02\n0cWMPmzi3VZg6BtNhNsID0SqB6x/QeXmZ6qkOPZOEQ0eIo/idDZc19n3XQKBgQCx\nh1F/zMFq9B2aP7E6czzIwvv0w5c/MHC9uJC8hJurqobuCzGOQKvlVOc1XJT0MTtY\nIX5teIeM9vNfo9Vck1IU6fk151I2q67FRIJtVaNPeZszRQYNtl/alnR04DpTNFW7\ne5KITDH/YdrhGVNArVZQM7QRHwYePtdQt/HW90wIrQKBgBK3Q3d7UTH8PGoRxbsP\nw993rlpn44UNenpna1Ny8bfUQfcpyJhqFVCJE6UIEaO3vTQuxgAzgxjPHbBX3zDo\nC4hRunMQVBrv1c1S2O0Ehj3zbHMUpccq1amk4JXwns44k+Epc2OiWM+/V0w8qotW\nHyFQzXCDWYXK5nA3XNavChNN\n-----END PRIVATE KEY-----\n`;
+const PRIVATE_KEY = `-----BEGIN PRIVATE KEY-----
+MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCey/1VIjruUBXf
+Hx+mRCavNIIQ1GHeV4Q64rSEuJZravnmHOs0/uI29fjCh6wsSo6/xgBdgQv1ZmyU
+t/DCCVz2RJRkVnm6cVrMZBdym70L6ZmE+0Z8ZgGdMRec9wy5U3+2v16rvfynU032
+Y2xtF5tbeCZvvqaPlJrwRIxDT7i8sUWb6VRkQNr9epL9sGtbO2My/Q6WgCPTsDWa
+27LtuqAaglipUEX/cCzbeuNxpdMSJ7ILCrX3Nv9N05SbyUFSYhaFmnzkxcvqtib0
+4ArBsL9HTul7RAsbD5zdEyxI2+yDoIRlml6jaH1PFj2OP1yg2QyMEoHDDBgi+w0I
+9teYBdx5AgMBAAECggEAGkwrcb4XttAt8xOnLOSD6IeAU7OsWoMxS4QwQ3uDM5pV
+dMGMxSvBwDrXXbXUskgNoF40wMdmeNcju7RDi4q76a+9SGmWwqTTld4skOcQNWkT
+6rUnPOIyubq/z5eNNKLKl3PVRIlTzk0KL/fSpLVgXdNFwEM5N7VzPD+J3/rTm/HX
+cJTa6JHyVD/1ay0wG89SHLGWAw9bABIZuSc9+X160jshp4TM/X6w+F8iBKvocAVh
+vS4q75qq3XeUC63tr9sMCmxpCr1mgcF9d6eONN2Yz/mgnaFtRmc1GiiKgtqFuF4c
+7HDffKQQgD4TyB4hUE0PVuICeomi2BcMsBH96b0dZQKBgQDf6kKR9SluhBMVnYWr
+xx/j2fWhxzo/23y0MO0ntNKKHhVVTfboRKlBH12HYutnAhWgH4t3SLxejJrEX+vu
+jg3z6sE1fmXP7zDNPsmiNs7Z4kdVsRcs8GmJXAkrEBjWnleS66tY83qVHWBbZXNF
+uuzRbvOHWqhT+UtIUazt48jXLQKBgQC1jQlrgp6QckAf0aS602NgQlzcEus+INP/
+w/pAgPMR/Sh9DvNWrolq4Zk5vhKkcDeUYuML2ygyU8EN0IHQL6zhG/ekgfSz9eg8
+QMrwFuJaEWtoqneGMgs2hE725hllYEGDI5jGzYlEm7jj5/glfRLnsT3efzIus6nj
+e6BETD8p/QKBgQDXupY6k25AeOT+LU7M6kMSPjtGi3DWdzvVS1IhsDgsM8Gv9zaM
+HyLGiFaPCsHr83ksVVgEK8K4gVTXH+dqZdiRiTputIGY7UUiaXzQWWe/SiAaMk02
+0cWMPmzi3VZg6BtNhNsID0SqB6x/QeXmZ6qkOPZOEQ0eIo/idDZc19n3XQKBgQCx
+h1F/zMFq9B2aP7E6czzIwvv0w5c/MHC9uJC8hJurqobuCzGOQKvlVOc1XJT0MTtY
+IX5teIeM9vNfo9Vck1IU6fk151I2q67FRIJtVaNPeZszRQYNtl/alnR04DpTNFW7
+e5KITDH/YdrhGVNArVZQM7QRHwYePtdQt/HW90wIrQKBgBK3Q3d7UTH8PGoRxbsP
+w993rlpn44UNenpna1Ny8bfUQfcpyJhqFVCJE6UIEaO3vTQuxgAzgxjPHbBX3zDo
+C4hRunMQVBrv1c1S2O0Ehj3zbHMUpccq1amk4JXwns44k+Epc2OiWM+/V0w8qotW
+HyFQzXCDWYXK5nA3XNavChNN
+-----END PRIVATE KEY-----`;
 
 // Mapping site -> chat ID
 const SITE_MAPPING = {
@@ -32,13 +59,26 @@ const doc = new GoogleSpreadsheet(SPREADSHEET_ID);
 // Init Telegram Bot
 const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: true });
 
-// Init WhatsApp Client
+// Init WhatsApp Client dengan konfigurasi untuk Ubuntu
 const client = new Client({
   authStrategy: new LocalAuth(),
   puppeteer: {
-    headless: false,
-    executablePath: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+    headless: true,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--no-first-run',
+      '--no-zygote',
+      '--disable-gpu'
+    ],
+    executablePath: process.env.CHROME_BIN || '/usr/bin/google-chrome-stable'
   },
+  webVersionCache: {
+    type: 'remote',
+    remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
+  }
 });
 
 // === FUNGSI UNTUK GOOGLE SHEETS ===
@@ -147,10 +187,19 @@ async function updateSpreadsheet(data) {
 
 client.on("qr", (qr) => {
   qrcode.generate(qr, { small: true });
+  console.log('📱 Scan QR code di atas dengan WhatsApp Anda');
 });
 
 client.on("ready", () => {
   console.log("✅ WhatsApp Client is ready!");
+});
+
+client.on("auth_failure", (error) => {
+  console.error("❌ Authentication failed:", error);
+});
+
+client.on("disconnected", (reason) => {
+  console.log("❌ Client was logged out:", reason);
 });
 
 // ========== HANDLE BALASAN DI TELEGRAM ==========
@@ -453,6 +502,7 @@ process.on("SIGINT", async () => {
   for (const [key, data] of Object.entries(activeAlarms)) {
     clearInterval(data.intervalId);
   }
+  bot.stopPolling();
   await client.destroy();
   process.exit(0);
 });
