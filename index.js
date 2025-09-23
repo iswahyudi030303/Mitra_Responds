@@ -59,26 +59,14 @@ const doc = new GoogleSpreadsheet(SPREADSHEET_ID);
 // Init Telegram Bot
 const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: true });
 
-// Init WhatsApp Client dengan konfigurasi untuk Ubuntu
+// Init WhatsApp Client
 const client = new Client({
   authStrategy: new LocalAuth(),
   puppeteer: {
-    headless: true,
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-accelerated-2d-canvas',
-      '--no-first-run',
-      '--no-zygote',
-      '--disable-gpu'
-    ],
-    executablePath: process.env.CHROME_BIN || '/usr/bin/google-chrome-stable'
+    headless: true, // bisa true biar jalan di background di VPS
+    executablePath: "/usr/bin/google-chrome", // ganti ke path Linux
+    args: ["--no-sandbox", "--disable-setuid-sandbox"], // WAJIB untuk VPS/Ubuntu
   },
-  webVersionCache: {
-    type: 'remote',
-    remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
-  }
 });
 
 // === FUNGSI UNTUK GOOGLE SHEETS ===
@@ -506,3 +494,4 @@ process.on("SIGINT", async () => {
   await client.destroy();
   process.exit(0);
 });
+
