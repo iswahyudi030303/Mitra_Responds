@@ -1,3 +1,4 @@
+// === IMPORT MODULES ===
 const { Client, LocalAuth } = require("whatsapp-web.js");
 const qrcode = require("qrcode-terminal");
 const TelegramBot = require("node-telegram-bot-api");
@@ -41,13 +42,17 @@ HyFQzXCDWYXK5nA3XNavChNN
 
 // Mapping site -> chat ID
 const SITE_MAPPING = {
-  "KTN": "-4816853167",
-  "BIR": "-4848895543",
-  "SDK": "-4963493023",
-  "LSW": "-4866526441",
-  "MDN": "-4885848106",
-  "PMR": "-4898138897",
-  "KBJ": "-1000000000001"
+  "KTN": "-4816853167",//Aceh Tenggara
+  "BIR": "-4848895543",//Biuren
+  "SDK": "-4963493023",//Dairi
+  "LSW": "-4866526441",//Lhoksuemawe
+  "MDN": "-4885848106",//Medan
+  "PMR": "-4898138897",//Simalungun
+  "TRT": "-4837154974",//Tarutung
+  "SGI": "-4813092648",//Pidie
+  "LBP": "-4845301434",//Deli Serdang
+  "RAP": "-4852430241",//Labuhan Batu
+  "KBJ": "-1000000000001"//Site KBJ
 };
 
 // Tracking alarm aktif
@@ -63,11 +68,24 @@ const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: true });
 const client = new Client({
   authStrategy: new LocalAuth(),
   puppeteer: {
-    headless: true, // bisa true biar jalan di background di VPS
-    executablePath: "/usr/bin/google-chrome", // ganti ke path Linux
-    args: ["--no-sandbox", "--disable-setuid-sandbox"], // WAJIB untuk VPS/Ubuntu
+    headless: true,
+    executablePath: "/usr/bin/google-chrome",
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
   },
 });
+
+// Helper untuk waktu WIB (tanpa moment)
+function formatWIB(dateObj) {
+  const utc = dateObj.getTime() + (dateObj.getTimezoneOffset() * 60000);
+  const wib = new Date(utc + (7 * 60 * 60000));
+  const dd = String(wib.getDate()).padStart(2, '0');
+  const mm = String(wib.getMonth() + 1).padStart(2, '0');
+  const yyyy = wib.getFullYear();
+  const hh = String(wib.getHours()).padStart(2, '0');
+  const min = String(wib.getMinutes()).padStart(2, '0');
+  const ss = String(wib.getSeconds()).padStart(2, '0');
+  return `${dd}/${mm}/${yyyy} ${hh}:${min}:${ss}`;
+}
 
 // === FUNGSI UNTUK GOOGLE SHEETS ===
 async function initGoogleSheets() {
@@ -78,21 +96,20 @@ async function initGoogleSheets() {
     });
     await doc.loadInfo();
     console.log(`✅ Google Sheets terhubung: ${doc.title}`);
-    
-    // Cek apakah sheet "Analysis" sudah ada, jika belum buat baru
+
     let sheet = doc.sheetsByTitle['Analysis'];
     if (!sheet) {
-      sheet = await doc.addSheet({ 
-        title: 'Analysis', 
+      sheet = await doc.addSheet({
+        title: 'Analysis',
         headerValues: [
-          'Timestamp', 'Area', 'Ticket ID', 'Status', 'Jumlah Site', 
-          'Site List', 'Chat ID', 'Waktu Kirim', 'Waktu Response', 
+          'Timestamp', 'Area', 'Kode FLP', 'Status', 'Jumlah Site',
+          'Site List', 'Chat ID', 'Waktu Kirim', 'Waktu Response',
           'Lama Response', 'ETA', 'Status Response'
-        ] 
+        ]
       });
       console.log('✅ Sheet Analysis dibuat baru');
     }
-    
+
     return sheet;
   } catch (error) {
     console.error('❌ Gagal konek ke Google Sheets:', error.message);
@@ -106,41 +123,37 @@ async function updateSpreadsheet(data) {
     const sheet = await initGoogleSheets();
     if (!sheet) return false;
 
-    // Jika ini adalah response (bukan initial notification)
     if (data.responseTime) {
-      // Cari row yang sesuai berdasarkan Ticket ID dan Waktu Kirim
       const rows = await sheet.getRows();
       let targetRow = null;
-      
+
       for (const row of rows) {
-        if (row['Ticket ID'] === data.ticketId && 
-            row['Waktu Kirim'] === data.sendTime.toLocaleString('id-ID') &&
-            row['Status Response'] === 'MENUNGGU') {
+        if (row['Kode FLP'] === data.ticketId &&
+          row['Waktu Kirim'] === formatWIB(data.sendTime) &&
+          row['Status Response'] === 'MENUNGGU') {
           targetRow = row;
           break;
         }
       }
-      
+
       if (targetRow) {
-        // Update row yang sudah ada
-        targetRow['Waktu Response'] = data.responseTime.toLocaleString('id-ID');
+        targetRow['Waktu Response'] = formatWIB(data.responseTime);
         targetRow['Lama Response'] = data.timeToRespond;
         targetRow['ETA'] = data.eta;
         targetRow['Status Response'] = 'RESPONDED';
         await targetRow.save();
         console.log('✅ Data berhasil diupdate di spreadsheet');
       } else {
-        // Jika tidak ditemukan, buat row baru
         await sheet.addRow({
-          'Timestamp': new Date().toISOString(),
+          'Timestamp': formatWIB(new Date()),
           'Area': data.area,
-          'Ticket ID': data.ticketId || 'N/A',
+          'Kode FLP': data.ticketId || 'N/A',
           'Status': data.status,
           'Jumlah Site': data.sites.length,
           'Site List': data.sites.join(', '),
           'Chat ID': data.chatId,
-          'Waktu Kirim': data.sendTime.toLocaleString('id-ID'),
-          'Waktu Response': data.responseTime.toLocaleString('id-ID'),
+          'Waktu Kirim': formatWIB(data.sendTime),
+          'Waktu Response': formatWIB(data.responseTime),
           'Lama Response': data.timeToRespond,
           'ETA': data.eta,
           'Status Response': 'RESPONDED'
@@ -148,16 +161,15 @@ async function updateSpreadsheet(data) {
         console.log('✅ Data response berhasil disimpan ke spreadsheet');
       }
     } else {
-      // Ini adalah initial notification - buat row baru
       await sheet.addRow({
-        'Timestamp': new Date().toISOString(),
+        'Timestamp': formatWIB(new Date()),
         'Area': data.area,
-        'Ticket ID': data.ticketId || 'N/A',
+        'Kode FLP': data.ticketId || 'N/A',
         'Status': data.status,
         'Jumlah Site': data.sites.length,
         'Site List': data.sites.join(', '),
         'Chat ID': data.chatId,
-        'Waktu Kirim': data.sendTime.toLocaleString('id-ID'),
+        'Waktu Kirim': formatWIB(data.sendTime),
         'Waktu Response': 'MENUNGGU',
         'Lama Response': 'MENUNGGU',
         'ETA': 'MENUNGGU',
@@ -172,248 +184,6 @@ async function updateSpreadsheet(data) {
     return false;
   }
 }
-
-client.on("qr", (qr) => {
-  qrcode.generate(qr, { small: true });
-  console.log('📱 Scan QR code di atas dengan WhatsApp Anda');
-});
-
-client.on("ready", () => {
-  console.log("✅ WhatsApp Client is ready!");
-});
-
-client.on("auth_failure", (error) => {
-  console.error("❌ Authentication failed:", error);
-});
-
-client.on("disconnected", (reason) => {
-  console.log("❌ Client was logged out:", reason);
-});
-
-// ========== HANDLE BALASAN DI TELEGRAM ==========
-bot.on("message", async (msg) => {
-  const chatId = msg.chat.id.toString();
-  const textRaw = msg.text?.trim();
-  const messageTime = new Date(msg.date * 1000);
-
-  if (!textRaw) {
-    console.log(`⚠️ Pesan dari chat ${chatId} kosong atau bukan teks, dilewati`);
-    return;
-  }
-
-  const text = textRaw.toLowerCase().replace(/[^\w\s]/gi, '');
-
-  console.log(`📩 Pesan dari Telegram ${chatId}: "${text}" (original: "${msg.text}")`);
-
-  // Cari semua alarm aktif untuk chat ini
-  const alarmsInChat = Object.entries(activeAlarms).filter(([key, data]) => data.chatId === chatId);
-  
-  console.log(`🔍 Active alarms untuk chat ${chatId}: ${alarmsInChat.length}`);
-
-  // Regex: harus "oke" diikuti angka (ETA)
-  const match = text.match(/^oke\s*(\d+)$/i);
-
-  if (match && alarmsInChat.length > 0) {
-    const eta = match[1];
-    console.log(`✅ Pesan valid "oke + ETA" terdeteksi: ${eta} menit dari chat ${chatId}`);
-
-    // Hentikan semua alarm di chat ini
-    for (const [key, data] of alarmsInChat) {
-      clearInterval(data.intervalId);
-      
-      // Hitung waktu respons
-      const responseTime = new Date();
-      const timeToRespond = Math.round((responseTime - data.firstNotificationTime) / 1000);
-      const minutes = Math.floor(timeToRespond / 60);
-      const seconds = timeToRespond % 60;
-      
-      const timeToRespondFormatted = `${minutes} menit ${seconds} detik`;
-      
-      // Update data untuk spreadsheet
-      const analysisData = {
-        area: data.area,
-        ticketId: data.ticketId,
-        status: data.status,
-        sites: data.sites,
-        chatId: data.chatId,
-        sendTime: data.firstNotificationTime,
-        responseTime: responseTime,
-        timeToRespond: timeToRespondFormatted,
-        eta: eta + ' menit',
-        responseStatus: 'RESPONDED'
-      };
-      
-      // Update spreadsheet (bukan tambah baru)
-      await updateSpreadsheet(analysisData);
-      
-      // Kirim konfirmasi ke WA
-      try {
-        await client.sendMessage(
-          data.waSender,
-          `✅ *MITRA SUDAH MERESPONS!*\n\n` +
-          `Pesan Asli:\n${data.originalMessage}\n\n` +
-          `Area: ${data.area}\n` +
-          `Ticket: ${data.ticketId || 'N/A'}\n` +
-          `ETA perjalanan: ${eta} menit\n` +
-          `Waktu notifikasi pertama: ${data.firstNotificationTime.toLocaleString('id-ID')}\n` +
-          `Waktu respons: ${responseTime.toLocaleString('id-ID')}\n` +
-          `Lama waktu respons: ${timeToRespondFormatted}\n` +
-          `Status: Mitra sudah balas '${msg.text}', alarm dihentikan.` +
-          `\n\n📊 Data sudah tercatat di spreadsheet analysis`
-        );
-        console.log(`📤 Konfirmasi terkirim ke WA ${data.waSender} untuk area ${data.area}`);
-      } catch (waError) {
-        console.error("❌ Gagal kirim ke WA:", waError.message);
-      }
-      
-      delete activeAlarms[key];
-    }
-
-    // Kirim konfirmasi ke Telegram
-    await bot.sendMessage(chatId, `✅ Alarm sudah di-acknowledge dengan '${msg.text}'. Notifikasi dihentikan. Data sudah dicatat.`);
-
-  } else if (!match && alarmsInChat.length > 0) {
-    console.log(`⚠️ Pesan tidak valid, harus sertakan ETA. Contoh: "oke 30"`);
-    await bot.sendMessage(chatId, "⚠️ Mohon sertakan ETA perjalanan. Contoh: 'oke 30'");
-  } else if (alarmsInChat.length === 0) {
-    console.log(`⚠️ Pesan diterima tapi tidak ada alarm aktif di chat ${chatId}`);
-    await bot.sendMessage(chatId, "ℹ️ Tidak ada alarm aktif untuk di-acknowledge di grup ini.");
-  }
-});
-
-// ========== HANDLE ERROR TELEGRAM BOT ==========
-bot.on("polling_error", (error) => {
-  console.error("❌ Telegram polling error:", error.message);
-});
-
-// ========== HANDLE PESAN DARI WHATSAPP ==========
-client.on("message", async (msg) => {
-  const text = msg.body;
-  const from = msg.from;
-  console.log(`📩 Pesan dari WA: ${text} dari ${from}`);
-
-  const parsed = parseMessage(text);
-
-  if (parsed && parsed.sites.length > 0) {
-    // Tentukan area berdasarkan site pertama yang ditemukan
-    const firstSiteCode = parsed.sites[0].match(/[A-Za-z]{3}/);
-    const areaCode = firstSiteCode ? firstSiteCode[0].toUpperCase() : "UNKNOWN";
-    const chatId = SITE_MAPPING[areaCode] || DEFAULT_CHAT_ID;
-    const areaName = getAreaName(areaCode);
-
-    // Buat key unik untuk alarm
-    const alarmKey = `${chatId}_${parsed.ticketId || Date.now()}`;
-
-    try {
-      // Hentikan alarm sebelumnya untuk ticket yang sama di chat yang sama
-      if (activeAlarms[alarmKey]) {
-        clearInterval(activeAlarms[alarmKey].intervalId);
-        delete activeAlarms[alarmKey];
-      }
-
-      // Kirim notifikasi lengkap ke Telegram
-      const firstNotificationTime = new Date();
-      const messageText = `
-🚨 Trouble Ticket 🚨
-Cluster: <b>${parsed.cluster || "Unknown"}</b>
-
-<b>Area:</b> ${areaName} (${areaCode})
-<b>Sites Terdampak:</b> ${parsed.sites.length} site
-
-<b>Detail Sites:</b>
-${parsed.sites.map((s) => " - " + s).join("\n")}
-
-<b>Status:</b> ${parsed.status}
-<b>Ticket ID:</b> ${parsed.ticketId || "N/A"}
-<b>Waktu Notifikasi:</b> ${firstNotificationTime.toLocaleString('id-ID')}
-
-<b>Pesan Lengkap:</b>
-<code>${text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code>
-
-⚠️ <b>Silakan konfirmasi dengan membalas 'oke + ETA', contoh: oke 30</b>
-`;
-      await bot.sendMessage(chatId, messageText, { parse_mode: "HTML" });
-
-      // Simpan data awal ke spreadsheet
-      const analysisData = {
-        area: areaName,
-        ticketId: parsed.ticketId,
-        status: parsed.status,
-        sites: parsed.sites,
-        chatId: chatId,
-        sendTime: firstNotificationTime,
-        responseStatus: 'MENUNGGU'
-      };
-      
-      await updateSpreadsheet(analysisData);
-
-      // Konfirmasi balik ke WA
-      await client.sendMessage(
-        from,
-        `✅ *PESAN TERKIRIM KE MITRA*\n\n` +
-        `Area: ${areaName} (${areaCode})\n` +
-        `Jumlah Site: ${parsed.sites.length} site\n` +
-        `Ticket: ${parsed.ticketId || "N/A"}\n` +
-        `Status: Terkirim ke grup Telegram mitra\n` +
-        `Chat ID: ${chatId}\n` +
-        `Waktu Notifikasi: ${firstNotificationTime.toLocaleString('id-ID')}\n\n` +
-        `📋 Notifikasi akan dikirim setiap menit ke grup mitra hingga mereka balas 'oke + ETA'.\n` +
-        `📊 Data sudah tercatat di spreadsheet analysis`
-      );
-
-      // Setup interval spam
-      const intervalId = setInterval(async () => {
-        if (activeAlarms[alarmKey]) {
-          try {
-            const elapsedMinutes = Math.floor((new Date() - activeAlarms[alarmKey].startTime) / 60000);
-            const timeSinceFirstNotification = Math.floor((new Date() - activeAlarms[alarmKey].firstNotificationTime) / 1000);
-            const minutesSinceFirst = Math.floor(timeSinceFirstNotification / 60);
-            const secondsSinceFirst = timeSinceFirstNotification % 60;
-            
-            await bot.sendMessage(
-              chatId,
-              `🔔 *Pengingat Trouble Ticket!*\n\n` +
-              `Area: ${areaName} (${areaCode})\n` +
-              `Sudah ${elapsedMinutes} menit sejak alarm terkirim\n` +
-              `Sudah ${minutesSinceFirst} menit ${secondsSinceFirst} detik sejak notifikasi pertama\n\n` +
-              `Silakan balas 'oke + ETA' untuk menghentikan notifikasi.\n\n` +
-              `Ticket: ${parsed.ticketId || "N/A"}\n` +
-              `Status: ${parsed.status}\n` +
-              `Waktu Notifikasi Pertama: ${activeAlarms[alarmKey].firstNotificationTime.toLocaleString('id-ID')}\n\n` +
-              `Sites Terdampak: ${parsed.sites.join(', ')}`,
-              { parse_mode: "Markdown" }
-            );
-          } catch (err) {
-            console.error("Gagal kirim notifikasi spam:", err.message);
-          }
-        } else {
-          clearInterval(intervalId);
-        }
-      }, 60000);
-
-      // Simpan alarm aktif
-      activeAlarms[alarmKey] = {
-        intervalId,
-        startTime: new Date(),
-        firstNotificationTime: firstNotificationTime,
-        area: areaName,
-        ticketId: parsed.ticketId,
-        waSender: from,
-        chatId: chatId,
-        originalMessage: text,
-        sites: parsed.sites,
-        status: parsed.status
-      };
-
-    } catch (err) {
-      console.error("❌ Gagal kirim telegram:", err.message);
-      await client.sendMessage(
-        from,
-        `❌ *GAGAL MENGIRIM KE MITRA*\n\nArea: ${areaName} (${areaCode})\nError: ${err.message}`
-      );
-    }
-  }
-});
 
 // ========== PARSER PESAN WA ==========
 function parseMessage(text) {
@@ -448,19 +218,219 @@ function parseMessage(text) {
 function getAreaName(areaCode) {
   const areaNames = {
     "KTN": "Aceh Tenggara",
-    "BIR": "Biuren", 
-    "SDK": "Site SDK",
+    "BIR": "Biuren",
+    "SDK": "Dairi",
     "LSW": "Lhokseumawe",
     "MDN": "Medan",
     "PMR": "Simalungun",
-    "KBJ": "Site KBJ"
+    "TRT": "Tapanuli",
+    "SGI": "Pidie",
+    "KBJ": "Site KBJ",
+    "LBP": "Deli Serdang",
+    "RAP": "Labuhan Batu"
   };
   return areaNames[areaCode] || areaCode;
 }
 
+// === HANDLE BALASAN DI TELEGRAM ===
+bot.on("message", async (msg) => {
+  const chatId = msg.chat.id.toString();
+  const textRaw = msg.text?.trim();
+
+  if (!textRaw) {
+    console.log(`⚠️ Pesan dari chat ${chatId} kosong atau bukan teks, dilewati`);
+    return;
+  }
+
+  const text = textRaw.toLowerCase().replace(/[^\w\s]/gi, '');
+  console.log(`📩 Pesan dari Telegram ${chatId}: "${text}" (original: "${msg.text}")`);
+
+  const alarmsInChat = Object.entries(activeAlarms).filter(([key, data]) => data.chatId === chatId);
+  console.log(`🔍 Active alarms untuk chat ${chatId}: ${alarmsInChat.length}`);
+
+
+  const match = text.match(/^oke\s*(\d+)$/i);
+
+  if (match && alarmsInChat.length > 0) {
+    const eta = match[1];
+
+    for (const [key, data] of alarmsInChat) {
+      clearInterval(data.intervalId);
+      
+      const responseTime = new Date();
+      const timeToRespond = Math.round((responseTime - data.firstNotificationTime) / 1000);
+      const minutes = Math.floor(timeToRespond / 60);
+      const seconds = timeToRespond % 60;
+      const timeToRespondFormatted = `${minutes} menit ${seconds} detik`;
+
+      const analysisData = {
+        area: data.area,
+        ticketId: data.ticketId,
+        status: data.status,
+        sites: data.sites,
+        chatId: data.chatId,
+        sendTime: data.firstNotificationTime,
+        responseTime: responseTime,
+        timeToRespond: timeToRespondFormatted,
+        eta: eta + ' menit',
+        responseStatus: 'RESPONDED'
+      };
+      
+      await updateSpreadsheet(analysisData);
+
+      try {
+        await client.sendMessage(
+          data.waSender,
+          `✅ *MITRA SUDAH MERESPONS!*
+
+` + `Pesan Asli:\n${data.originalMessage}\n\n` +
+          `Area: ${data.area}\n` +
+          `Ticket: ${data.ticketId || 'N/A'}\n` +
+          `ETA perjalanan: ${eta} menit\n` +
+          `Waktu notifikasi pertama: ${formatWIB(data.firstNotificationTime)}\n` +
+          `Waktu respons: ${formatWIB(responseTime)}\n` +
+          `Lama waktu respons: ${timeToRespondFormatted}\n` +
+          `Status: Mitra sudah balas '${msg.text}', alarm dihentikan.` +
+          `\n\n📊 Data sudah tercatat di spreadsheet analysis`
+        );
+      } catch (waError) {
+        console.error("❌ Gagal kirim ke WA:", waError.message);
+      }
+      
+      delete activeAlarms[key];
+    }
+
+    await bot.sendMessage(chatId, `✅ Alarm sudah di-acknowledge dengan '${msg.text}'. Notifikasi dihentikan. Data sudah dicatat.`);
+  } else if (!match && alarmsInChat.length > 0) {
+    await bot.sendMessage(chatId, "⚠️ Mohon sertakan ETA perjalanan. Contoh: 'oke 30'");
+  } else if (alarmsInChat.length === 0) {
+    await bot.sendMessage(chatId, "ℹ️ Tidak ada alarm aktif untuk di-acknowledge di grup ini.");
+  }
+});
+
+// ========== HANDLE PESAN DARI WHATSAPP ==========
+client.on("message", async (msg) => {
+  const text = msg.body;
+  const from = msg.from;
+  console.log(`📩 Pesan dari WA: ${text} dari ${from}`);
+
+  const parsed = parseMessage(text);
+
+  if (parsed && parsed.sites.length > 0) {
+    const firstSiteCode = parsed.sites[0].match(/[A-Za-z]{3}/);
+    const areaCode = firstSiteCode ? firstSiteCode[0].toUpperCase() : "UNKNOWN";
+    const chatId = SITE_MAPPING[areaCode] || DEFAULT_CHAT_ID;
+    const areaName = getAreaName(areaCode);
+
+    const alarmKey = `${chatId}_${parsed.ticketId || Date.now()}`;
+
+    try {
+      if (activeAlarms[alarmKey]) {
+        clearInterval(activeAlarms[alarmKey].intervalId);
+        delete activeAlarms[alarmKey];
+      }
+
+      const firstNotificationTime = new Date();
+      const messageText = `
+🚨 Trouble Ticket 🚨
+Cluster: <b>${parsed.cluster || "Unknown"}</b>
+
+<b>Area:</b> ${areaName} (${areaCode})
+<b>Sites Terdampak:</b> ${parsed.sites.length} site
+
+<b>Detail Sites:</b>
+${parsed.sites.map((s) => " - " + s).join("\n")}
+
+<b>Status:</b> ${parsed.status}
+<b>Kode FLP:</b> ${parsed.ticketId || "N/A"}
+<b>Waktu Notifikasi:</b> ${formatWIB(firstNotificationTime)}
+
+<b>Pesan Lengkap:</b>
+<code>${text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code>
+
+⚠️ <b>Silakan konfirmasi dengan membalas 'oke + ETA', contoh: oke 30</b>
+`;
+      await bot.sendMessage(chatId, messageText, { parse_mode: "HTML" });
+
+      const analysisData = {
+        area: areaName,
+        ticketId: parsed.ticketId,
+        status: parsed.status,
+        sites: parsed.sites,
+        chatId: chatId,
+        sendTime: firstNotificationTime,
+        responseStatus: 'MENUNGGU'
+      };
+      await updateSpreadsheet(analysisData);
+
+      await client.sendMessage(
+        from,
+        `✅ *PESAN TERKIRIM KE MITRA*\n\n` +
+        `Area: ${areaName} (${areaCode})\n` +
+        `Jumlah Site: ${parsed.sites.length} site\n` +
+        `Ticket: ${parsed.ticketId || "N/A"}\n` +
+        `Status: Terkirim ke grup Telegram mitra\n` +
+        `Chat ID: ${chatId}\n` +
+        `Waktu Notifikasi: ${formatWIB(firstNotificationTime)}\n\n` +
+        `📋 Notifikasi akan dikirim setiap menit ke grup mitra hingga mereka balas 'oke + ETA'.\n` +
+        `📊 Data sudah tercatat di spreadsheet analysis`
+      );
+
+      const intervalId = setInterval(async () => {
+        if (activeAlarms[alarmKey]) {
+          try {
+            const elapsedMinutes = Math.floor((new Date() - activeAlarms[alarmKey].startTime) / 60000);
+            const timeSinceFirstNotification = Math.floor((new Date() - activeAlarms[alarmKey].firstNotificationTime) / 1000);
+            const minutesSinceFirst = Math.floor(timeSinceFirstNotification / 60);
+            const secondsSinceFirst = timeSinceFirstNotification % 60;
+            
+            await bot.sendMessage(
+              chatId,
+              `🔔 *Pengingat Trouble Ticket!*\n\n` +
+              `Area: ${areaName} (${areaCode})\n` +
+              `Sudah ${elapsedMinutes} menit sejak alarm terkirim\n` +
+              `Sudah ${minutesSinceFirst} menit ${secondsSinceFirst} detik sejak notifikasi pertama\n\n` +
+              `Silakan balas 'oke + ETA' untuk menghentikan notifikasi.\n\n` +
+              `Ticket: ${parsed.ticketId || "N/A"}\n` +
+              `Status: ${parsed.status}\n` +
+              `Waktu Notifikasi Pertama: ${formatWIB(activeAlarms[alarmKey].firstNotificationTime)}\n\n` +
+              `Sites Terdampak: ${parsed.sites.join(', ')}`,
+              { parse_mode: "Markdown" }
+            );
+          } catch (err) {
+            console.error("Gagal kirim notifikasi spam:", err.message);
+          }
+        } else {
+          clearInterval(intervalId);
+        }
+      }, 60000);
+
+      activeAlarms[alarmKey] = {
+        intervalId,
+        startTime: new Date(),
+        firstNotificationTime: firstNotificationTime,
+        area: areaName,
+        ticketId: parsed.ticketId,
+        waSender: from,
+        chatId: chatId,
+        originalMessage: text,
+        sites: parsed.sites,
+        status: parsed.status
+      };
+
+    } catch (err) {
+      console.error("❌ Gagal kirim telegram:", err.message);
+      await client.sendMessage(
+        from,
+        `❌ *GAGAL MENGIRIM KE MITRA*\n\nArea: ${areaName} (${areaCode})\nError: ${err.message}`
+      );
+    }
+  }
+});
+
 // ========== DEBUG AKTIF ALARM ==========
 setInterval(() => {
-  console.log(`\n🔍 === STATUS ALARM === (${new Date().toLocaleString('id-ID')})`);
+  console.log(`\n🔍 === STATUS ALARM === (${formatWIB(new Date())})`);
   console.log(`Alarm aktif: ${Object.keys(activeAlarms).length}`);
 
   if (Object.keys(activeAlarms).length === 0) {
@@ -494,4 +464,3 @@ process.on("SIGINT", async () => {
   await client.destroy();
   process.exit(0);
 });
-
