@@ -64,7 +64,7 @@ const ESCALATION_MAPPING = {
 };
 
 // Chat khusus untuk notifikasi TT (Level 2 & 3)
-const TT_NOTIFICATION_CHAT_ID = "-1000000000003"; // Ganti dengan chat ID yang sesuai
+const TT_NOTIFICATION_CHAT_ID = "-4801793040"; // Ganti dengan chat ID yang sesuai
 
 // Tracking alarm aktif
 const activeAlarms = {};
@@ -684,3 +684,4 @@ process.on("SIGINT", async () => {
   await client.destroy();
   process.exit(0);
 });
+
