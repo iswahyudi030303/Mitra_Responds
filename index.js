@@ -63,8 +63,8 @@ const ESCALATION_MAPPING = {
   "LEVEL3": "-4894095484"  // Manager Group
 };
 
-// Chat khusus untuk notifikasi TT (Level 2 & 3)
-const TT_NOTIFICATION_CHAT_ID = "-1000000000003"; // Ganti dengan chat ID yang sesuai
+// Chat khusus untuk monitoring TT aktif
+const TT_MONITORING_CHAT_ID = "-4801793040"; // Ganti dengan chat ID monitoring TT
 
 // Tracking alarm aktif
 const activeAlarms = {};
@@ -220,31 +220,40 @@ async function updateSpreadsheet(data) {
   }
 }
 
-// Fungsi untuk mengirim notifikasi TT sederhana
-async function sendTTNotification(alarmData) {
+// Fungsi untuk mengirim notifikasi TT SEDERHANA (tanpa detail site)
+async function sendSimpleTTNotification(alarmData, level = "LEVEL1") {
   try {
     const messageText = `
-📊 *TROUBLE TICKET MASUK*
-📍 Area: ${alarmData.area}
-🔧 Status: ${alarmData.status}
-📋 Sites: ${alarmData.sites.length} site
-⏰ Waktu: ${formatWIB(new Date())}
+🚨 *TROUBLE TICKET - ${level}* 🚨
 
-${alarmData.sites.slice(0, 5).map(site => `• ${site}`).join('\n')}
-${alarmData.sites.length > 5 ? `• ...dan ${alarmData.sites.length - 5} site lainnya` : ''}
+📍 *Area:* ${alarmData.area}
+🔧 *Status:* ${alarmData.status}
+📊 *Jumlah Site:* ${alarmData.sites.length} site
+⏰ *Waktu:* ${formatWIB(new Date())}
+
+⚠️ *Tindakan Required:*
+Balas pesan ini dengan format: *oke ETA*
+Contoh: *oke 30* (untuk ETA 30 menit)
+
+📋 *Sistem Eskalasi:*
+- Level 1: Notifikasi ke mitra
+- Level 2: Eskalasi ke supervisor setelah 5 menit
+- Level 3: Eskalasi ke manager setelah 25 menit
+
+🔒 *Informasi detail site tersimpan di database internal*
 `;
 
-    await bot.sendMessage(TT_NOTIFICATION_CHAT_ID, messageText, { parse_mode: "Markdown" });
-    console.log(`✅ Notifikasi TT terkirim ke ${TT_NOTIFICATION_CHAT_ID}`);
+    await bot.sendMessage(alarmData.chatId, messageText, { parse_mode: "Markdown" });
+    console.log(`✅ Notifikasi TT sederhana terkirim ke ${alarmData.chatId}`);
     return true;
   } catch (error) {
-    console.error('❌ Gagal kirim notifikasi TT:', error.message);
+    console.error('❌ Gagal kirim notifikasi TT sederhana:', error.message);
     return false;
   }
 }
 
-// Fungsi untuk mengirim notifikasi eskalasi (DIPERBAIKI)
-async function sendEscalationNotification(alarmKey, escalationLevel) {
+// Fungsi untuk mengirim notifikasi eskalasi SEDERHANA
+async function sendSimpleEscalationNotification(alarmKey, escalationLevel) {
   const alarmData = activeAlarms[alarmKey];
   if (!alarmData) {
     console.log(`❌ Alarm data tidak ditemukan untuk key: ${alarmKey}`);
@@ -266,23 +275,23 @@ async function sendEscalationNotification(alarmKey, escalationLevel) {
 🚨 *ESKALASI TROUBLE TICKET* 🚨
 *Level:* ${escalationLevel}
 
-📋 *Detail Trouble:*
+📋 *Informasi Trouble:*
 - Area: ${alarmData.area}
 - Status: ${alarmData.status}
-- Sites Terdampak: ${alarmData.sites.length} site
-- Waktu Notifikasi Pertama: ${formatWIB(alarmData.firstNotificationTime)}
-- Sudah ${minutesSinceFirst} menit ${secondsSinceFirst} detik sejak notifikasi pertama
-
-📊 *Detail Sites:*
-${alarmData.sites.map((s) => " - " + s).join("\n")}
+- Jumlah Site: ${alarmData.sites.length} site
+- Durasi: ${minutesSinceFirst} menit ${secondsSinceFirst} detik
 
 ⚠️ *Tindakan Required:*
 Mitra belum merespons dalam waktu yang ditentukan. Segera follow up!
+
+⏰ *Notifikasi akan dikirim setiap 30 detik hingga di-acknowledge*
+
+🔒 *Detail site lengkap tersedia di database internal*
 `;
 
     await bot.sendMessage(targetChatId, messageText, { parse_mode: "Markdown" });
     
-    // Update spreadsheet dengan level eskalasi
+    // Update spreadsheet dengan level eskalasi (data lengkap)
     const analysisData = {
       area: alarmData.area,
       status: alarmData.status,
@@ -301,9 +310,9 @@ Mitra belum merespons dalam waktu yang ditentukan. Segera follow up!
     alarmData.currentEscalationLevel = escalationLevel;
     alarmData.lastEscalationTime = new Date();
     
-    // Kirim notifikasi TT ke chat khusus
-    if (escalationLevel === 'LEVEL2' || escalationLevel === 'LEVEL3') {
-      await sendTTNotification(alarmData);
+    // Setup notifikasi 30 detik untuk Level 1 dan 2
+    if (escalationLevel === 'LEVEL1' || escalationLevel === 'LEVEL2') {
+      setupEscalationNotificationInterval(alarmKey, escalationLevel);
     }
     
   } catch (error) {
@@ -311,8 +320,52 @@ Mitra belum merespons dalam waktu yang ditentukan. Segera follow up!
   }
 }
 
-// Setup interval untuk notifikasi per 15 detik
-function setupNotificationInterval(alarmKey, chatId, areaName, areaCode, sites, status, firstNotificationTime) {
+// Fungsi untuk mengirim notifikasi monitoring TT SEDERHANA
+async function sendSimpleTTMonitoringNotification() {
+  try {
+    const activeAlarmsCount = Object.keys(activeAlarms).length;
+    
+    if (activeAlarmsCount === 0) {
+      const messageText = `📊 *MONITORING TROUBLE TICKET*\n\n` +
+                         `🟢 *TIDAK ADA TT AKTIF*\n\n` +
+                         `⏰ Update: ${formatWIB(new Date())}\n` +
+                         `Semua trouble ticket telah ditangani.`;
+      
+      await bot.sendMessage(TT_MONITORING_CHAT_ID, messageText, { parse_mode: "Markdown" });
+    } else {
+      let messageText = `📊 *MONITORING TROUBLE TICKET*\n\n` +
+                       `🔴 *ADA ${activeAlarmsCount} TT AKTIF*\n\n`;
+      
+      Object.entries(activeAlarms).forEach(([key, data], index) => {
+        const timeSinceFirst = Math.floor((new Date() - data.firstNotificationTime) / 1000);
+        const minutesSinceFirst = Math.floor(timeSinceFirst / 60);
+        const secondsSinceFirst = timeSinceFirst % 60;
+        
+        messageText += `*TT ${index + 1}:*\n`;
+        messageText += `• Area: ${data.area}\n`;
+        messageText += `• Level: ${data.currentEscalationLevel}\n`;
+        messageText += `• Jumlah Site: ${data.sites.length}\n`;
+        messageText += `• Durasi: ${minutesSinceFirst}m ${secondsSinceFirst}s\n`;
+        messageText += `• Status: Menunggu Response\n\n`;
+      });
+      
+      messageText += `⏰ Update: ${formatWIB(new Date())}\n`;
+      messageText += `_Gunakan command /status untuk detail lengkap_\n`;
+      messageText += `🔒 _Detail site tersimpan di database internal_`;
+      
+      await bot.sendMessage(TT_MONITORING_CHAT_ID, messageText, { parse_mode: "Markdown" });
+    }
+    
+    console.log(`✅ Notifikasi monitoring TT terkirim ke ${TT_MONITORING_CHAT_ID}`);
+    return true;
+  } catch (error) {
+    console.error('❌ Gagal kirim notifikasi monitoring TT:', error.message);
+    return false;
+  }
+}
+
+// Setup interval untuk notifikasi per 15 detik (SEDERHANA)
+function setupSimpleNotificationInterval(alarmKey, chatId, areaName, areaCode, sites, status, firstNotificationTime) {
   return setInterval(async () => {
     if (activeAlarms[alarmKey]) {
       try {
@@ -322,13 +375,13 @@ function setupNotificationInterval(alarmKey, chatId, areaName, areaCode, sites, 
 
         await bot.sendMessage(
           chatId,
-          `🔔 *Pengingat Trouble Ticket!*\n\n` +
-          `Area: ${areaName} (${areaCode})\n` +
-          `Sudah ${minutesSinceFirst} menit ${secondsSinceFirst} detik sejak notifikasi pertama\n\n` +
-          `Silakan balas 'oke + ETA' untuk menghentikan notifikasi.\n\n` +
+          `🔔 *PENGINGAT TROUBLE TICKET!*\n\n` +
+          `Area: ${areaName}\n` +
+          `Sudah ${minutesSinceFirst} menit ${secondsSinceFirst} detik\n\n` +
+          `Silakan balas *oke ETA* untuk menghentikan notifikasi\n\n` +
           `Status: ${status}\n` +
-          `Waktu Notifikasi Pertama: ${formatWIB(firstNotificationTime)}\n\n` +
-          `Sites Terdampak: ${sites.join(', ')}`,
+          `Waktu Notifikasi: ${formatWIB(firstNotificationTime)}\n\n` +
+          `🔒 *Detail site tersimpan aman di database*`,
           { parse_mode: "Markdown" }
         );
         
@@ -338,6 +391,52 @@ function setupNotificationInterval(alarmKey, chatId, areaName, areaCode, sites, 
       }
     }
   }, 15000); // Setiap 15 detik
+}
+
+// Setup interval untuk notifikasi eskalasi per 30 detik (SEDERHANA)
+function setupEscalationNotificationInterval(alarmKey, escalationLevel) {
+  const alarmData = activeAlarms[alarmKey];
+  if (!alarmData) return;
+
+  // Hentikan interval sebelumnya jika ada
+  if (alarmData.escalationNotificationInterval) {
+    clearInterval(alarmData.escalationNotificationInterval);
+  }
+
+  const targetChatId = ESCALATION_MAPPING[escalationLevel];
+  if (!targetChatId) return;
+
+  alarmData.escalationNotificationInterval = setInterval(async () => {
+    if (activeAlarms[alarmKey] && activeAlarms[alarmKey].currentEscalationLevel === escalationLevel) {
+      try {
+        const timeSinceFirst = Math.floor((new Date() - alarmData.firstNotificationTime) / 1000);
+        const minutesSinceFirst = Math.floor(timeSinceFirst / 60);
+        const secondsSinceFirst = timeSinceFirst % 60;
+
+        const messageText = `
+🔔 *NOTIFIKASI ESKALASI ${escalationLevel} - 30 DETIK*
+
+📋 *Informasi Trouble:*
+- Area: ${alarmData.area}
+- Status: ${alarmData.status}
+- Jumlah Site: ${alarmData.sites.length}
+- Durasi: ${minutesSinceFirst}m ${secondsSinceFirst}s
+
+⚠️ *Tindakan Required:*
+Balas *oke ETA* untuk menghentikan notifikasi
+
+⏰ Waktu: ${formatWIB(new Date())}
+
+🔒 *Detail site lengkap di database internal*
+`;
+
+        await bot.sendMessage(targetChatId, messageText, { parse_mode: "Markdown" });
+        console.log(`✅ Notifikasi 30 detik eskalasi ${escalationLevel} terkirim`);
+      } catch (err) {
+        console.error(`❌ Gagal kirim notifikasi 30 detik ${escalationLevel}:`, err.message);
+      }
+    }
+  }, 30000); // Setiap 30 detik
 }
 
 client.on("qr", (qr) => {
@@ -370,14 +469,19 @@ bot.on("message", async (msg) => {
 
   const text = textRaw.toLowerCase().replace(/[^\w\s]/gi, '');
 
+  // Handle command /status untuk monitoring
+  if (text === '/status' && chatId === TT_MONITORING_CHAT_ID) {
+    await sendSimpleTTMonitoringNotification();
+    return;
+  }
+
   console.log(`📩 Pesan dari Telegram ${chatId}: "${text}" (original: "${msg.text}")`);
 
-  // Cari semua alarm aktif untuk chat ini (DIPERBAIKI)
+  // Cari semua alarm aktif untuk chat ini
   const alarmsInChat = Object.entries(activeAlarms).filter(([key, data]) => {
     return data.chatId === chatId || 
            (data.currentEscalationLevel === 'LEVEL2' && ESCALATION_MAPPING.LEVEL2 === chatId) || 
-           (data.currentEscalationLevel === 'LEVEL3' && ESCALATION_MAPPING.LEVEL3 === chatId) ||
-           (TT_NOTIFICATION_CHAT_ID === chatId && (data.currentEscalationLevel === 'LEVEL2' || data.currentEscalationLevel === 'LEVEL3'));
+           (data.currentEscalationLevel === 'LEVEL3' && ESCALATION_MAPPING.LEVEL3 === chatId);
   });
 
   console.log(`🔍 Active alarms untuk chat ${chatId}: ${alarmsInChat.length}`);
@@ -394,6 +498,8 @@ bot.on("message", async (msg) => {
       if (data.intervalId) clearInterval(data.intervalId);
       if (data.escalationTimeout) clearTimeout(data.escalationTimeout);
       if (data.notificationInterval) clearInterval(data.notificationInterval);
+      if (data.level3Timeout) clearTimeout(data.level3Timeout);
+      if (data.escalationNotificationInterval) clearInterval(data.escalationNotificationInterval);
 
       // Hitung waktu respons
       const responseTime = new Date();
@@ -402,11 +508,11 @@ bot.on("message", async (msg) => {
       const seconds = timeToRespond % 60;
       const timeToRespondFormatted = `${minutes} menit ${seconds} detik`;
 
-      // Update data untuk spreadsheet
+      // Update data untuk spreadsheet (DATA LENGKAP)
       const analysisData = {
         area: data.area,
         status: data.status,
-        sites: data.sites,
+        sites: data.sites, // ✅ Site detail tetap disimpan di sheets
         chatId: data.chatId,
         sendTime: data.firstNotificationTime,
         responseTime: responseTime,
@@ -444,6 +550,9 @@ bot.on("message", async (msg) => {
     // Kirim konfirmasi ke Telegram
     await bot.sendMessage(chatId, `✅ Alarm sudah di-acknowledge dengan '${msg.text}'. Notifikasi dihentikan. Data sudah dicatat. Selamat bekerja dan perhatikan K3`);
 
+    // Update monitoring TT
+    await sendSimpleTTMonitoringNotification();
+    
   } else if (!match && alarmsInChat.length > 0) {
     console.log(`⚠️ Pesan tidak valid, harus sertakan ETA. Contoh: "oke 30"`);
     await bot.sendMessage(chatId, "⚠️ Mohon sertakan ETA perjalanan. Contoh: 'oke 30'");
@@ -467,7 +576,7 @@ client.on("message", async (msg) => {
   const parsed = parseMessage(text);
 
   if (parsed && parsed.sites.length > 0) {
-    // Tentukan area berdasarkan site pertama yang ditemukan (DIPERBAIKI untuk Aceh Tenggara)
+    // Tentukan area berdasarkan site pertama yang ditemukan
     const firstSiteCode = parsed.sites[0].match(/[A-Za-z]{3}/);
     let areaCode = firstSiteCode ? firstSiteCode[0].toUpperCase() : "UNKNOWN";
     
@@ -493,42 +602,17 @@ client.on("message", async (msg) => {
         if (activeAlarms[existingAlarmKey].intervalId) clearInterval(activeAlarms[existingAlarmKey].intervalId);
         if (activeAlarms[existingAlarmKey].escalationTimeout) clearTimeout(activeAlarms[existingAlarmKey].escalationTimeout);
         if (activeAlarms[existingAlarmKey].notificationInterval) clearInterval(activeAlarms[existingAlarmKey].notificationInterval);
+        if (activeAlarms[existingAlarmKey].escalationNotificationInterval) clearInterval(activeAlarms[existingAlarmKey].escalationNotificationInterval);
         delete activeAlarms[existingAlarmKey];
         console.log(`🔄 Alarm sebelumnya untuk site yang sama dihentikan`);
       }
 
-      // Kirim notifikasi lengkap ke Telegram
+      // Simpan data awal ke spreadsheet (DATA LENGKAP)
       const firstNotificationTime = new Date();
-      const messageText = `
-🚨 Trouble Ticket 🚨
-Cluster: <b>${parsed.cluster || "Unknown"}</b>
-
-<b>Area:</b> ${areaName} (${areaCode})
-<b>Sites Terdampak:</b> ${parsed.sites.length} site
-
-<b>Detail Sites:</b>
-${parsed.sites.map((s) => " - " + s).join("\n")}
-
-<b>Status:</b> ${parsed.status}
-<b>Waktu Notifikasi:</b> ${formatWIB(firstNotificationTime)}
-
-<b>Pesan Lengkap:</b>
-<code>${text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code>
-
-⏰ <b>SISTEM ESKALASI AKTIF:</b>
-- Level 1: Notifikasi ke mitra (sekarang)
-- Level 2: Eskalasi ke supervisor setelah 10 menit
-- Level 3: Eskalasi ke manager setelah 30 menit
-
-⚠️ <b>Silakan konfirmasi dengan membalas 'oke + ETA', contoh: oke 30</b>
-`;
-      await bot.sendMessage(chatId, messageText, { parse_mode: "HTML" });
-
-      // Simpan data awal ke spreadsheet
       const analysisData = {
         area: areaName,
         status: parsed.status,
-        sites: parsed.sites,
+        sites: parsed.sites, // ✅ Site detail tetap disimpan di sheets
         chatId: chatId,
         sendTime: firstNotificationTime,
         escalationLevel: 'LEVEL1',
@@ -536,6 +620,15 @@ ${parsed.sites.map((s) => " - " + s).join("\n")}
       };
 
       await updateSpreadsheet(analysisData);
+
+      // Kirim notifikasi SEDERHANA ke Telegram (TANPA DETAIL SITE)
+      await sendSimpleTTNotification({
+        area: areaName,
+        status: parsed.status,
+        sites: parsed.sites,
+        chatId: chatId,
+        firstNotificationTime: firstNotificationTime
+      }, 'LEVEL1');
 
       // Konfirmasi balik ke WA
       await client.sendMessage(
@@ -548,35 +641,35 @@ ${parsed.sites.map((s) => " - " + s).join("\n")}
         `Waktu Notifikasi: ${formatWIB(firstNotificationTime)}\n\n` +
         `📋 Sistem eskalasi aktif:\n` +
         `• Level 1: Notifikasi ke mitra (sekarang)\n` +
-        `• Level 2: Eskalasi ke supervisor setelah 10 menit\n` +
-        `• Level 3: Eskalasi ke manager setelah 30 menit\n\n` +
+        `• Level 2: Eskalasi ke supervisor setelah 5 menit\n` +
+        `• Level 3: Eskalasi ke manager setelah 25 menit\n\n` +
         `⚠️ Notifikasi akan berhenti otomatis saat mitra balas 'oke + ETA'\n` +
         `📊 Data sudah tercatat di spreadsheet analysis`
       );
 
-      // Setup interval spam setiap 15 detik
-      const notificationInterval = setupNotificationInterval(
+      // Setup interval spam setiap 15 detik (SEDERHANA)
+      const notificationInterval = setupSimpleNotificationInterval(
         alarmKey, chatId, areaName, areaCode, parsed.sites, parsed.status, firstNotificationTime
       );
 
-      // Setup eskalasi otomatis (DIPERBAIKI)
+      // Setup eskalasi otomatis
       const escalationTimeout = setTimeout(async () => {
         if (activeAlarms[alarmKey]) {
           console.log(`⏰ Eskalasi Level 2 untuk ${areaName}`);
-          await sendEscalationNotification(alarmKey, 'LEVEL2');
+          await sendSimpleEscalationNotification(alarmKey, 'LEVEL2');
           
-          // Eskalasi ke Level 3 setelah 20 menit tambahan (total 30 menit)
+          // Eskalasi ke Level 3 setelah 20 menit tambahan (total 25 menit)
           const level3Timeout = setTimeout(async () => {
             if (activeAlarms[alarmKey]) {
               console.log(`⏰ Eskalasi Level 3 untuk ${areaName}`);
-              await sendEscalationNotification(alarmKey, 'LEVEL3');
+              await sendSimpleEscalationNotification(alarmKey, 'LEVEL3');
             }
           }, 20 * 60 * 1000); // 20 menit setelah Level 2
           
           // Simpan timeout untuk Level 3
           activeAlarms[alarmKey].level3Timeout = level3Timeout;
         }
-      }, 5 * 60 * 1000); // 10 menit untuk Level 2
+      }, 5 * 60 * 1000); // 5 menit untuk Level 2
 
       // Simpan alarm aktif
       activeAlarms[alarmKey] = {
@@ -592,6 +685,9 @@ ${parsed.sites.map((s) => " - " + s).join("\n")}
         status: parsed.status,
         currentEscalationLevel: 'LEVEL1'
       };
+
+      // Kirim notifikasi monitoring TT
+      await sendSimpleTTMonitoringNotification();
 
     } catch (err) {
       console.error("❌ Gagal kirim telegram:", err.message);
@@ -669,6 +765,13 @@ setInterval(() => {
   console.log("========================\n");
 }, 30000);
 
+// ========== MONITORING TT SETIAP 1 MENIT ==========
+setInterval(async () => {
+  if (Object.keys(activeAlarms).length > 0) {
+    await sendSimpleTTMonitoringNotification();
+  }
+}, 60000); // Setiap 1 menit
+
 client.initialize();
 
 // ========== GRACEFUL SHUTDOWN ==========
@@ -679,6 +782,7 @@ process.on("SIGINT", async () => {
     if (data.escalationTimeout) clearTimeout(data.escalationTimeout);
     if (data.notificationInterval) clearInterval(data.notificationInterval);
     if (data.level3Timeout) clearTimeout(data.level3Timeout);
+    if (data.escalationNotificationInterval) clearInterval(data.escalationNotificationInterval);
   }
   bot.stopPolling();
   await client.destroy();
